@@ -208,57 +208,91 @@ export const generateVoiceover = async (
   const ai = getClient();
   const model = "gemini-2.5-flash-preview-tts";
 
-  const voiceName = config.gender === Gender.GIRL ? 'Kore' : 'Puck';
-  const promptText = `Say with a ${config.accent} accent and ${config.tone} tone: ${text}`;
+  // Sanitize text: Remove visual instructions like [Close up], notes in (), and markdown
+  let cleanText = text
+    .replace(/\[[\s\S]*?\]/g, '') // Remove [Visuals]
+    .replace(/\([\s\S]*?\)/g, '') // Remove (Notes)
+    .replace(/[*_~`]/g, '')       // Remove markdown symbols
+    .trim();
 
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{ parts: [{ text: promptText }] }],
-      config: {
-        responseModalities: ['AUDIO'], 
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName },
+  // Collapse multiple spaces
+  cleanText = cleanText.replace(/\s+/g, ' ');
+
+  if (!cleanText || cleanText.length < 1) {
+    throw new Error("Text segment is empty after cleaning.");
+  }
+
+  const voiceName = config.gender === Gender.GIRL ? 'Kore' : 'Puck';
+
+  // Strategy: 
+  // 1. Try with full styled prompt (Accent + Tone)
+  // 2. Fallback to "Read this text" (Good stability)
+  // 3. Fallback to raw text (Maximum stability)
+  const prompts = [
+    `Say with a ${config.accent} accent and ${config.tone} tone: ${cleanText}`,
+    `Read the following text aloud: ${cleanText}`,
+    cleanText
+  ];
+
+  let lastError;
+
+  for (const promptText of prompts) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ parts: [{ text: promptText }] }],
+        config: {
+          responseModalities: ['AUDIO'], 
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!response.candidates || response.candidates.length === 0) {
-      throw new Error("No candidates returned from API. The service might be temporarily unavailable.");
+      if (!response.candidates || response.candidates.length === 0) {
+        throw new Error("No candidates returned from API.");
+      }
+
+      const candidate = response.candidates[0];
+
+      // Check for stop reason
+      if (candidate.finishReason !== "STOP" && !candidate.content) {
+         const reason = candidate.finishReason || "UNKNOWN";
+         // Throw to trigger retry
+         throw new Error(`Stopped. Reason: ${reason}`);
+      }
+
+      const parts = candidate.content?.parts || [];
+      const audioPart = parts.find(p => p.inlineData && p.inlineData.data);
+      
+      if (!audioPart || !audioPart.inlineData?.data) {
+        throw new Error("No audio data received.");
+      }
+
+      const base64Audio = audioPart.inlineData.data;
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      
+      const audioBuffer = await decodeAudioData(
+        decode(base64Audio),
+        audioContext,
+        24000,
+        1
+      );
+
+      // If successful, return immediately
+      return audioBuffer;
+
+    } catch (error: any) {
+      console.warn(`Voice generation attempt failed for prompt: "${promptText.substring(0, 15)}..."`, error.message);
+      lastError = error;
+      // Wait a short bit before retry
+      await new Promise(r => setTimeout(r, 800));
     }
-
-    const candidate = response.candidates[0];
-
-    if (candidate.finishReason !== "STOP" && !candidate.content) {
-      throw new Error(`Voice generation stopped. Reason: ${candidate.finishReason}. Try simplifying the text.`);
-    }
-
-    const parts = candidate.content?.parts || [];
-    const audioPart = parts.find(p => p.inlineData && p.inlineData.data);
-    
-    if (!audioPart || !audioPart.inlineData?.data) {
-      console.error("Full Response:", JSON.stringify(response, null, 2));
-      throw new Error("No audio data received from API. The model processed the request but returned no audio.");
-    }
-
-    const base64Audio = audioPart.inlineData.data;
-
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-    
-    const audioBuffer = await decodeAudioData(
-      decode(base64Audio),
-      audioContext,
-      24000,
-      1
-    );
-
-    return audioBuffer;
-  } catch (error) {
-    console.error("Voiceover generation failed:", error);
-    throw error;
   }
+
+  throw lastError || new Error("Voice generation failed after retries.");
 };
 
 export const generateScriptWithAI = async (params: ScriptWizardParams, gender: Gender): Promise<string> => {
@@ -278,50 +312,34 @@ export const generateScriptWithAI = async (params: ScriptWizardParams, gender: G
       1. Energetic Intro: Welcome everyone to the [Topic] Quiz!
       2. Ask 3 to 5 fun Questions about ${params.topic}.
       3. For EACH Question, follow this EXACT structure with newlines:
-         - [Question Text]
+         - [Visual: Timer counting down or thinking face] [Question Text]
          - [Short filler like "Tick tock... thinking time..."]
-         - [The Answer]
+         - [Visual: Celebration confetti] [The Answer]
       4. Outro: Great job friends! See you next time.
       NOTE: Keep questions simple for kids age ${params.targetAge}.
       `;
   } else if (params.category.includes('Toy Review') || params.category.includes('Unboxing')) {
       specializedPrompt = `
       FORMAT: TOY REVIEW / UNBOXING
-      1. Intro: Super excitement! Show the box (describe it).
-      2. Unboxing: "Let's open it!" Use excitement words (Wow! Look at this!).
+      1. Intro: [Visual: Close up of mystery box] Super excitement! Show the box (describe it).
+      2. Unboxing: "Let's open it!" Use excitement words.
       3. Features: Describe 3 cool things about the toy/item.
-      4. Rating: Give it a fun score (e.g., 10 out of 10 stars!).
+      4. Rating: Give it a fun score.
       5. Outro: Ask viewers if they want this toy.
       `;
   } else if (params.category.includes('Gaming')) {
       specializedPrompt = `
       FORMAT: GAMING COMMENTARY
-      1. Intro: High energy! "Welcome back gamers!"
+      1. Intro: High energy! [Visual: Character waving] "Welcome back gamers!"
       2. The Goal: "Today we are building a castle / fighting a boss".
       3. Action: Describe gameplay moments with excitement ("Oh no! Run!", "Yes! We did it!").
       4. Outro: "Like and Subscribe for more gaming fun!"
-      `;
-  } else if (params.category.includes('DIY') || params.category.includes('Crafts')) {
-      specializedPrompt = `
-      FORMAT: STEP-BY-STEP GUIDE
-      1. Intro: "Today we are making [Item]!"
-      2. Materials: List what we need quickly.
-      3. Steps: Clear, simple instruction steps (Step 1, Step 2...).
-      4. Reveal: "Wow, look how beautiful it is!"
-      5. Outro: Ask viewers to try it.
-      `;
-  } else if (params.category.includes('Bedtime')) {
-      specializedPrompt = `
-      FORMAT: SOOTHING BEDTIME STORY
-      1. Intro: Soft, calm welcome. "Time to relax..."
-      2. Story: A gentle story about ${params.topic}.
-      3. Tone: Very calm, slow pacing, no sudden excitement.
-      4. Outro: "Sweet dreams, goodnight."
       `;
   } else {
       specializedPrompt = `
       Structure it with an Intro, Body, and Outro.
       Structure it for storytelling or teaching.
+      Include [Visual: ...] descriptions for key moments.
       `;
   }
 
@@ -342,13 +360,15 @@ export const generateScriptWithAI = async (params: ScriptWizardParams, gender: G
     
     IMPORTANT:
     - Include a brief self-introduction in the Intro using a fun, generated nickname appropriate for a ${gender} (e.g., "It's me, [Name]!").
+    - **CRITICAL FOR VIDEO GENERATION:** You MUST include visual scene descriptions in brackets at the start of paragraphs or sentences. 
+      Example: "[Visual: A cute cartoon bunny hopping in a green field] Hi friends! Look at me hop!"
+      These visuals will be used by an AI video generator. Describe camera angles (Close-up, Wide shot) and style (3D cartoon, colorful).
     
     ${specializedPrompt}
 
     Guidelines:
     - Use short, clear sentences suitable for a child voiceover.
-    - Be energetic and interactive (ask questions to the viewers).
-    - DO NOT include visual instructions or scene headings (e.g., [Intro Scene]). JUST THE SPOKEN TEXT.
+    - Be energetic and interactive.
     - Add paragraph breaks for natural pauses.
   `;
 
@@ -365,13 +385,26 @@ export const generateScriptWithAI = async (params: ScriptWizardParams, gender: G
   }
 };
 
-export const generateVideoSegment = async (prompt: string): Promise<string> => {
+export const generateVideoSegment = async (input: string): Promise<string> => {
   const ai = getClient();
   const model = 'veo-3.1-fast-generate-preview';
   
-  // Use a child-friendly visual style prompt
-  // If it looks like a quiz question, we emphasize the subject
-  const enhancedPrompt = `cinematic 3d animation style, cute, colorful, for kids video, high quality: ${prompt}`;
+  // Extract visual prompt from brackets if present
+  const visualMatch = input.match(/\[(.*?)\]/);
+  
+  // Use bracket content if found, otherwise use the full text as fallback
+  let textPrompt = visualMatch ? visualMatch[1] : input;
+  
+  // Clean up: remove newlines
+  textPrompt = textPrompt.replace(/\n/g, ' ').trim();
+  
+  // Fallback for safety if prompt extraction failed or is empty
+  if (!textPrompt || textPrompt.length < 2) {
+      textPrompt = "cute cartoon character smiling, happy atmosphere, bright colors";
+  }
+  
+  // Construct the enhanced prompt for Veo
+  const enhancedPrompt = `cinematic 3d animation style, cute, colorful, for kids video, high quality, ${textPrompt}`;
 
   try {
     let operation = await ai.models.generateVideos({
