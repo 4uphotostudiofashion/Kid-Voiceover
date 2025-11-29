@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { VoiceSelector } from './components/VoiceSelector';
 import { ScriptEditor } from './components/ScriptEditor';
 import { AudioPlayer } from './components/AudioPlayer';
 import { ScriptWizard } from './components/ScriptWizard';
-import { VoiceConfig, Gender, Accent, Tone, CustomVoice, VoiceSegment, ScriptWizardParams } from './types';
+import { VoiceConfig, Gender, Accent, Tone, CustomVoice, VoiceSegment, ScriptWizardParams, SavedScript } from './types';
 import { enhanceScript, generateVoiceover, generateScriptWithAI, generateVideoSegment } from './services/geminiService';
 import { Mic2, Info, CheckCircle2, Circle, Loader2, PlayCircle, Video } from 'lucide-react';
 
@@ -17,6 +18,12 @@ const App: React.FC = () => {
   });
 
   const [customVoices, setCustomVoices] = useState<CustomVoice[]>([]);
+  // Load saved scripts from localStorage on mount
+  const [savedScripts, setSavedScripts] = useState<SavedScript[]>(() => {
+    const saved = localStorage.getItem('kidvoice_saved_scripts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
   const [script, setScript] = useState<string>("Hi friends! Today we are learning about good habits.\n\nLet’s start with brushing our teeth.\n\nThen we will eat a healthy breakfast!");
   const [explanation, setExplanation] = useState<string | undefined>();
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
@@ -30,6 +37,11 @@ const App: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [isWizardGenerating, setIsWizardGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Persist scripts when changed
+  useEffect(() => {
+    localStorage.setItem('kidvoice_saved_scripts', JSON.stringify(savedScripts));
+  }, [savedScripts]);
 
   const handleEnhance = async () => {
     setIsEnhancing(true);
@@ -139,7 +151,8 @@ const App: React.FC = () => {
   const handleWizardGenerate = async (params: ScriptWizardParams) => {
     setIsWizardGenerating(true);
     try {
-        const newScript = await generateScriptWithAI(params);
+        // Pass the currently selected gender to the generator
+        const newScript = await generateScriptWithAI(params, config.gender);
         setScript(newScript);
         setShowWizard(false);
     } catch (err: any) {
@@ -165,6 +178,25 @@ const App: React.FC = () => {
     if (segment.videoUrl) {
         setActiveVideoUrl(segment.videoUrl);
     }
+  };
+
+  // Saved Script Handlers
+  const handleSaveScript = (name: string, content: string) => {
+    const newScript: SavedScript = {
+      id: Date.now().toString(),
+      name,
+      content,
+      date: new Date().toLocaleDateString()
+    };
+    setSavedScripts([...savedScripts, newScript]);
+  };
+
+  const handleDeleteScript = (id: string) => {
+    setSavedScripts(savedScripts.filter(s => s.id !== id));
+  };
+
+  const handleLoadScript = (content: string) => {
+    setScript(content);
   };
 
   return (
@@ -230,6 +262,7 @@ const App: React.FC = () => {
             <div className="flex-grow min-h-[400px]">
               <ScriptEditor
                 script={script}
+                config={config}
                 onChange={setScript}
                 onEnhance={handleEnhance}
                 onGenerateAudio={handleGenerateAudio}
@@ -238,6 +271,10 @@ const App: React.FC = () => {
                 isEnhancing={isEnhancing}
                 isGeneratingAudio={isGenerating}
                 explanation={explanation}
+                savedScripts={savedScripts}
+                onSaveScript={handleSaveScript}
+                onLoadScript={handleLoadScript}
+                onDeleteScript={handleDeleteScript}
               />
             </div>
 

@@ -1,3 +1,4 @@
+
 export enum Gender {
   GIRL = 'Girl',
   BOY = 'Boy'
@@ -58,10 +59,18 @@ export interface VoiceSegment {
   videoStatus: 'idle' | 'generating' | 'completed' | 'error';
 }
 
+export interface SavedScript {
+  id: string;
+  name: string;
+  content: string;
+  date: string;
+}
+
 export interface ScriptWizardParams {
   channelName: string;
   category: string; // e.g., 'Moral Stories', 'Science', 'Fun Facts'
   topic: string;
   duration: 'short' | 'long'; // 'short' (30-60s) or 'long' (2-4m)
   targetAge: string;
+  hookStyle: string; // 'Question', 'Fact', 'Teaser', 'Challenge'
 }

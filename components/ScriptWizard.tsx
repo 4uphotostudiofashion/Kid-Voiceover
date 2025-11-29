@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { ScriptWizardParams } from '../types';
-import { X, Sparkles, Youtube, Clock, Users, BookOpen, Loader2 } from 'lucide-react';
+import { X, Sparkles, Youtube, Clock, Users, BookOpen, Loader2, Zap } from 'lucide-react';
 
 interface ScriptWizardProps {
   onClose: () => void;
@@ -9,13 +10,13 @@ interface ScriptWizardProps {
 }
 
 export const ScriptWizard: React.FC<ScriptWizardProps> = ({ onClose, onGenerate, isGenerating }) => {
-  const [step, setStep] = useState(1);
   const [params, setParams] = useState<ScriptWizardParams>({
     channelName: '',
     category: 'Moral Stories',
     topic: '',
     duration: 'short',
-    targetAge: '7-10 years'
+    targetAge: '7-10 years',
+    hookStyle: 'Curiosity Question'
   });
 
   const handleChange = (field: keyof ScriptWizardParams, value: string) => {
@@ -62,7 +63,7 @@ export const ScriptWizard: React.FC<ScriptWizardProps> = ({ onClose, onGenerate,
                />
             </div>
 
-            {/* Question 2: Category */}
+            {/* Question 2: Category & Duration */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
@@ -74,12 +75,21 @@ export const ScriptWizard: React.FC<ScriptWizardProps> = ({ onClose, onGenerate,
                   onChange={(e) => handleChange('category', e.target.value)}
                   className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none bg-white"
                 >
-                  <option>Moral Stories</option>
-                  <option>Quiz / Trivia</option>
-                  <option>Educational / Science</option>
-                  <option>Fun Facts</option>
-                  <option>Daily Habits</option>
-                  <option>ABC & Numbers</option>
+                  <optgroup label="Educational (Evergreen)">
+                    <option>Moral Stories</option>
+                    <option>Quiz / Trivia</option>
+                    <option>Educational / Science</option>
+                    <option>Fun Facts</option>
+                    <option>Daily Habits</option>
+                    <option>ABC & Numbers</option>
+                  </optgroup>
+                  <optgroup label="Trending & Fun 🔥">
+                    <option>Toy Review / Unboxing</option>
+                    <option>Gaming (Minecraft/Roblox)</option>
+                    <option>DIY Crafts & Art</option>
+                    <option>Funny Skits / Pretend Play</option>
+                    <option>Bedtime Stories</option>
+                  </optgroup>
                 </select>
               </div>
 
@@ -99,7 +109,26 @@ export const ScriptWizard: React.FC<ScriptWizardProps> = ({ onClose, onGenerate,
               </div>
             </div>
 
-            {/* Question 3: Topic */}
+             {/* Question 3: Hook Strategy */}
+             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-yellow-500" />
+                  Hook Strategy (Intro)
+                </label>
+                <select 
+                  value={params.hookStyle}
+                  onChange={(e) => handleChange('hookStyle', e.target.value)}
+                  className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none bg-white"
+                >
+                  <option value="Curiosity Question">Curiosity Question ("Did you know...?")</option>
+                  <option value="Surprising Fact">Surprising Fact ("You won't believe...")</option>
+                  <option value="Challenge">Challenge ("I bet you can't guess...")</option>
+                  <option value="Story Teaser">Story Teaser ("It was a dark night...")</option>
+                  <option value="High Energy">High Energy ("HEY FRIENDS! Are you ready?!")</option>
+                </select>
+              </div>
+
+            {/* Question 4: Topic */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
                  <Users className="w-4 h-4 text-amber-500" />
@@ -108,7 +137,7 @@ export const ScriptWizard: React.FC<ScriptWizardProps> = ({ onClose, onGenerate,
                <textarea 
                  value={params.topic}
                  onChange={(e) => handleChange('topic', e.target.value)}
-                 placeholder="e.g. Animal Sounds Quiz OR Space Trivia"
+                 placeholder="e.g. Unboxing a new Lego set OR Minecraft Survival Tips"
                  className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none h-24 resize-none"
                />
             </div>

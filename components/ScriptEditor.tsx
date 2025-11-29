@@ -1,9 +1,12 @@
+
 import React, { useState, useRef } from 'react';
-import { Sparkles, Play, Loader2, Mic, Square, Trash2, Download, Zap, ChevronDown, Layers, Wand2 } from 'lucide-react';
+import { Sparkles, Play, Loader2, Mic, Square, Trash2, Download, Zap, ChevronDown, Layers, Wand2, Save, Folder, FileText, X } from 'lucide-react';
 import { transcribeAudio } from '../services/geminiService';
+import { SavedScript, VoiceConfig, Gender } from '../types';
 
 interface ScriptEditorProps {
   script: string;
+  config: VoiceConfig;
   onChange: (script: string) => void;
   onEnhance: () => void;
   onGenerateAudio: () => void;
@@ -12,6 +15,10 @@ interface ScriptEditorProps {
   isEnhancing: boolean;
   isGeneratingAudio: boolean;
   explanation?: string;
+  savedScripts: SavedScript[];
+  onSaveScript: (name: string, content: string) => void;
+  onLoadScript: (content: string) => void;
+  onDeleteScript: (id: string) => void;
 }
 
 const TEMPLATES = [
@@ -35,6 +42,7 @@ const TEMPLATES = [
 
 export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   script,
+  config,
   onChange,
   onEnhance,
   onGenerateAudio,
@@ -42,11 +50,18 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   onOpenWizard,
   isEnhancing,
   isGeneratingAudio,
-  explanation
+  explanation,
+  savedScripts,
+  onSaveScript,
+  onLoadScript,
+  onDeleteScript
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newScriptName, setNewScriptName] = useState("");
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -117,12 +132,119 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     setShowTemplates(false);
   };
 
+  const handleSaveClick = () => {
+    if (!script.trim()) return;
+    setIsSaving(true);
+  };
+
+  const confirmSave = () => {
+    if (!newScriptName.trim()) return;
+    onSaveScript(newScriptName, script);
+    setNewScriptName("");
+    setIsSaving(false);
+  };
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-slate-800">Video Script</h2>
+        <div>
+           <h2 className="text-xl font-bold text-slate-800">Video Script</h2>
+           {/* Visual Badge for Identity */}
+           <div className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+               config.gender === Gender.GIRL ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+           }`}>
+               <span>Speaking As:</span>
+               <span>{config.gender === Gender.GIRL ? '👧' : '👦'}</span>
+               <span>{config.gender} (Age {config.age})</span>
+           </div>
+        </div>
+        
         <div className="flex items-center gap-2">
           
+          {/* Saved Scripts Dropdown */}
+          <div className="relative">
+             <button 
+               onClick={() => setShowSaved(!showSaved)}
+               className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+               title="My Saved Scripts"
+             >
+               <Folder className="w-5 h-5" />
+             </button>
+             
+             {showSaved && (
+               <>
+                 <div className="fixed inset-0 z-10" onClick={() => setShowSaved(false)}></div>
+                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 z-20 overflow-hidden animate-fade-in">
+                   <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                     <span>My Scripts</span>
+                     <span className="bg-slate-200 text-slate-500 px-1.5 rounded-full">{savedScripts.length}</span>
+                   </div>
+                   <div className="max-h-60 overflow-y-auto">
+                     {savedScripts.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400 italic">No saved scripts yet</div>
+                     ) : (
+                        savedScripts.map((s) => (
+                         <div key={s.id} className="p-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 group flex justify-between items-center">
+                           <button
+                             onClick={() => { onLoadScript(s.content); setShowSaved(false); }}
+                             className="text-left text-sm text-slate-600 hover:text-indigo-700 truncate flex-1"
+                           >
+                             <div className="font-bold truncate">{s.name}</div>
+                             <div className="text-[10px] text-slate-400">{s.date}</div>
+                           </button>
+                           <button 
+                             onClick={(e) => { e.stopPropagation(); onDeleteScript(s.id); }}
+                             className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500"
+                           >
+                              <X className="w-3 h-3" />
+                           </button>
+                         </div>
+                       ))
+                     )}
+                   </div>
+                 </div>
+               </>
+             )}
+          </div>
+
+          {/* Save Button */}
+          <div className="relative">
+              <button 
+                onClick={handleSaveClick}
+                disabled={!script}
+                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-30"
+                title="Save Script to Library"
+              >
+                <Save className="w-5 h-5" />
+              </button>
+
+              {isSaving && (
+                 <>
+                   <div className="fixed inset-0 z-10" onClick={() => setIsSaving(false)}></div>
+                   <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl shadow-xl border border-slate-100 z-20 p-3 animate-fade-in">
+                      <label className="block text-xs font-bold text-slate-500 mb-2">Name your script</label>
+                      <div className="flex gap-2">
+                         <input 
+                           autoFocus
+                           className="flex-1 border border-slate-200 rounded px-2 py-1 text-sm outline-none focus:border-indigo-500"
+                           placeholder="My Awesome Story"
+                           value={newScriptName}
+                           onChange={(e) => setNewScriptName(e.target.value)}
+                           onKeyDown={(e) => e.key === 'Enter' && confirmSave()}
+                         />
+                         <button 
+                           onClick={confirmSave}
+                           disabled={!newScriptName}
+                           className="bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold disabled:opacity-50"
+                         >
+                           Save
+                         </button>
+                      </div>
+                   </div>
+                 </>
+              )}
+          </div>
+
           {/* Templates Dropdown */}
           <div className="relative">
              <button 

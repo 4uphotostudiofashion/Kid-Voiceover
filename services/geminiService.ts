@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { VoiceConfig, Gender, Accent, ScriptResponse, VoiceAnalysisResponse, Tone, ScriptWizardParams } from "../types";
 
@@ -260,7 +261,7 @@ export const generateVoiceover = async (
   }
 };
 
-export const generateScriptWithAI = async (params: ScriptWizardParams): Promise<string> => {
+export const generateScriptWithAI = async (params: ScriptWizardParams, gender: Gender): Promise<string> => {
   const ai = getClient();
   const model = "gemini-2.5-flash";
 
@@ -268,8 +269,9 @@ export const generateScriptWithAI = async (params: ScriptWizardParams): Promise<
     ? "Length: strictly between 50 to 100 words (approx 30-45 seconds)." 
     : "Length: strictly between 300 to 500 words (approx 2-3 minutes).";
 
-  // Specialized formatting for Quiz vs Story
+  // Specialized formatting for different categories
   let specializedPrompt = "";
+  
   if (params.category === 'Quiz / Trivia') {
       specializedPrompt = `
       FORMAT: QUIZ SHOW STYLE
@@ -281,6 +283,40 @@ export const generateScriptWithAI = async (params: ScriptWizardParams): Promise<
          - [The Answer]
       4. Outro: Great job friends! See you next time.
       NOTE: Keep questions simple for kids age ${params.targetAge}.
+      `;
+  } else if (params.category.includes('Toy Review') || params.category.includes('Unboxing')) {
+      specializedPrompt = `
+      FORMAT: TOY REVIEW / UNBOXING
+      1. Intro: Super excitement! Show the box (describe it).
+      2. Unboxing: "Let's open it!" Use excitement words (Wow! Look at this!).
+      3. Features: Describe 3 cool things about the toy/item.
+      4. Rating: Give it a fun score (e.g., 10 out of 10 stars!).
+      5. Outro: Ask viewers if they want this toy.
+      `;
+  } else if (params.category.includes('Gaming')) {
+      specializedPrompt = `
+      FORMAT: GAMING COMMENTARY
+      1. Intro: High energy! "Welcome back gamers!"
+      2. The Goal: "Today we are building a castle / fighting a boss".
+      3. Action: Describe gameplay moments with excitement ("Oh no! Run!", "Yes! We did it!").
+      4. Outro: "Like and Subscribe for more gaming fun!"
+      `;
+  } else if (params.category.includes('DIY') || params.category.includes('Crafts')) {
+      specializedPrompt = `
+      FORMAT: STEP-BY-STEP GUIDE
+      1. Intro: "Today we are making [Item]!"
+      2. Materials: List what we need quickly.
+      3. Steps: Clear, simple instruction steps (Step 1, Step 2...).
+      4. Reveal: "Wow, look how beautiful it is!"
+      5. Outro: Ask viewers to try it.
+      `;
+  } else if (params.category.includes('Bedtime')) {
+      specializedPrompt = `
+      FORMAT: SOOTHING BEDTIME STORY
+      1. Intro: Soft, calm welcome. "Time to relax..."
+      2. Story: A gentle story about ${params.topic}.
+      3. Tone: Very calm, slow pacing, no sudden excitement.
+      4. Outro: "Sweet dreams, goodnight."
       `;
   } else {
       specializedPrompt = `
@@ -296,7 +332,16 @@ export const generateScriptWithAI = async (params: ScriptWizardParams): Promise<
     
     Target Audience: ${params.targetAge}.
     Category: ${params.category}.
+    Host Persona: A ${params.targetAge} year old ${gender}.
     ${lengthPrompt}
+    
+    HOOK STRATEGY: "${params.hookStyle}"
+    - The script MUST start with a strong Hook based on the strategy above to grab attention in the first 5 seconds.
+    - If strategy is "Curiosity Question", start with "Did you know...?" or similar.
+    - If strategy is "Challenge", start with "I bet you can't..."
+    
+    IMPORTANT:
+    - Include a brief self-introduction in the Intro using a fun, generated nickname appropriate for a ${gender} (e.g., "It's me, [Name]!").
     
     ${specializedPrompt}
 
