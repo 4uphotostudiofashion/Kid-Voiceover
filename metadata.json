@@ -1,0 +1,7 @@
+{
+  "name": "KidVoice Pro - AI Voiceover Agent",
+  "description": "A specialized AI agent for generating natural, expressive, and child-friendly voiceovers for kids' educational videos.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
